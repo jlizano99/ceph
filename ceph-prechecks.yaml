@@ -1,0 +1,127 @@
+---
+- hosts: ceph
+  remote_user: root
+  vars_files:
+  - variables
+  - my_vault.yaml
+  tasks:
+
+  - name: Copiar archivo hosts /etc/hosts
+    template:
+      src: hosts.j2
+      dest: /etc/hosts
+
+  - name: Abrir puertos para {{User_ceph}}
+    firewalld:
+      port: "{{ item }}"
+      permanent: yes
+      zone: public
+      state: enabled
+    with_items:
+     - 80/tcp
+     - 2003/tcp
+     - 6800-7300/tcp
+     - 4505-4506/tcp
+     - 6789/tcp
+
+  - name: Agregar usuario {{User_ceph}}
+    user:
+      name: "{{User_ceph}}"
+      password: "{{ my_password | password_hash('sha512') }}"
+      shell: /bin/bash
+      createhome: yes
+      home: /home/{{User_ceph}}
+      append: yes
+
+  - name: Creacion de archivo vacio para el password
+    file:
+      path: "/etc/sudoers.d/{{User_ceph}}"
+      state: touch
+
+  - name: Agregar linea a sudoers.d/
+    lineinfile:
+      path: /etc/sudoers.d/{{User_ceph}}
+      line: cephuser ALL = (root) NOPASSWD:ALL
+      create: yes
+
+  - name: Cambiar permisos al archivo
+    file:
+      path: /etc/sudoers.d/{{User_ceph}}
+      owner: root
+      group: root
+      mode: '0440'
+
+  - name: Comentar linea en sudoers
+    lineinfile:
+      path: /etc/sudoers
+      regexp: '^Defaults requiretty'
+      insertafter: '^#Defaults requiretty'
+      state: absent
+
+  - name: Instalar ceph
+    command: rpm -Uhv http://download.ceph.com/rpm-jewel/el7/noarch/ceph-release-1-1.el7.noarch.rpm
+
+  - name: Instalar librerias necesarias para Ceph
+    yum:
+      name:
+        - git
+        - screen
+        - nano
+        - vim
+        - net-tools
+        - wget
+        - unzip
+        - curl
+        - bind-utils
+        - bridge-utils
+        - bash-completion
+        - ntp-doc
+        - kexec-tools
+        - createrepo
+        - yum-utils
+        - sshpass
+        - ntp
+        - ntpdate
+        - open-vm-tools
+      state: present
+
+  - name: Desactivar SELinux
+    selinux:
+      state: disabled
+
+  - name: Ejecutar comandos de ntpd
+    command: "{{ item }}"
+    with_items:
+     - ntpdate 0.us.pool.ntp.org
+     - hwclock --systohc
+
+  - name: Habilitar servicio ntpd
+    systemd:
+      name: ntpd.service
+      enabled: yes
+      masked: no
+
+  - name: Iniciar servicio ntpd 
+    systemd:
+      state: started
+      name: ntpd.service
+
+  - name: Reiniciar las máquinas para hacer todos los cambios sean efectivos
+    reboot:
+      reboot_timeout: 120
+
+  - name: Esperar 1 minuto mientras las máquinas inician
+    wait_for_connection:
+      delay: 30
+      timeout: 60
+
+- hosts: "{{Ceph01_IP}}"
+  remote_user: root
+  vars_files:
+  - variables
+  tasks:
+
+  - name: Instalar ceph deploy
+    yum:
+      name: ceph-deploy
+      state: present

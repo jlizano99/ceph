@@ -1,0 +1,133 @@
+---
+- hosts: "{{Ceph01_IP}}"
+  remote_user: "{{User_ceph}}"
+  vars_files:
+  - variables
+  tasks:
+
+  - name: Generar SSH keys
+    shell: ssh-keygen -b 2048 -t rsa -f /home/{{User_ceph}}/.ssh/id_rsa -q -N ""
+    args:
+      creates: /home/{{User_ceph}}/.ssh/id_rsa
+
+  - name: Creacion de archivo vacio para el password
+    file:
+      path: "/home/{{User_ceph}}/.ssh/config"
+      state: touch
+
+  - name: Crear archivo y agregar lineas
+    blockinfile:
+      path: /home/{{User_ceph}}/.ssh/config
+      block: |
+        Host "{{Ceph01_Hostname}}"
+                Hostname "{{Ceph01_Hostname}}"
+                User "{{User_ceph}}"
+        Host "{{Ceph02_Hostname}}"
+                Hostname "{{Ceph02_Hostname}}"
+                User "{{User_ceph}}"
+        Host "{{Ceph03_Hostname}}"
+                Hostname "{{Ceph03_Hostname}}"
+                User "{{User_ceph}}"
+
+  - name: Cambiar permisos al archivo .ssh/config
+    file:
+      path: "{{ item }}"
+      owner: "{{User_ceph}}"
+      group: "{{User_ceph}}"
+      mode: '0644'
+    with_items:
+      - /home/{{User_ceph}}/.ssh/config
+
+  - name: Modificar autorizacion ssh
+    command: "{{ item }}"
+    with_items:
+       - ssh-keyscan "{{Ceph01_Hostname}}" "{{Ceph02_Hostname}}" "{{Ceph03_Hostname}}" >> /home/{{User_ceph}}/.ssh/known_hosts
+
+  - name: Crear ssh-key
+    command: "{{ item }}"
+    with_items:
+      - sshpass -p "{{PasswordUserCeph}}" ssh-copy-id {{User_ceph}}@{{Ceph01_Hostname}} -o StrictHostKeyChecking=no
+      - sshpass -p "{{PasswordUserCeph}}" ssh-copy-id {{User_ceph}}@{{Ceph02_Hostname}} -o StrictHostKeyChecking=no
+      - sshpass -p "{{PasswordUserCeph}}" ssh-copy-id {{User_ceph}}@{{Ceph03_Hostname}} -o StrictHostKeyChecking=no
+
+- hosts: cephuser
+  remote_user: "{{User_ceph}}"
+  become: true
+  vars_files:
+  - variables
+  tasks:
+
+  - name: Ejecutar comandos de particionamiento
+    command: "{{ item }}"
+    with_items:
+      - parted -s "{{DiscoExtraCeph}}" mklabel gpt mkpart primary xfs 0% 100%
+      - mkfs.xfs "{{DiscoExtraCeph}}" -f
+      - blkid -o value -s TYPE "{{DiscoExtraCeph}}"
+
+- hosts: "{{Ceph01_IP}}"
+  remote_user: "{{User_ceph}}"
+  become: true
+  vars_files:
+  - variables
+  tasks:
+
+  - name: Creacion de directorio para instalacion de cluster
+    file:
+      path: /home/{{User_ceph}}/cluster
+      state: directory
+
+  - name: Crear la configuracion del cluster
+    command: ceph-deploy new "{{Ceph01_Hostname}}"
+    args:
+      chdir: "/home/{{User_ceph}}/cluster"
+
+  - name: Agregar lineas en configuracion de ceph
+    blockinfile:
+      path: /home/{{User_ceph}}/cluster/ceph.conf
+      block: |
+        # Your network address
+        public network = "{{PublicNetwork}}"
+        osd pool default size = 2
+
+  - name: Instalar CEPH - Varios procesos # buena practica separarlos
+    command: ceph-deploy install "{{Ceph01_Hostname}}" "{{Ceph02_Hostname}}" "{{Ceph03_Hostname}}"
+    args:
+      chdir: "/home/{{User_ceph}}/cluster"
+
+  - name: Instalar CEPH - Mon process # buena practica separarlos
+    command: "{{ item }}"
+    args:
+      chdir: "/home/{{User_ceph}}/cluster"
+    with_items:
+      - ceph-deploy mon create-initial
+      - ceph-deploy gatherkeys "{{Ceph01_Hostname}}"
+
+  - name: Instalar CEPH - OSD Process # buena practica separarlos
+    command: "{{ item }}"
+    args:
+      chdir: "/home/{{User_ceph}}/cluster"
+    with_items:
+      - ceph-deploy disk list "{{Ceph01_Hostname}}" "{{Ceph02_Hostname}}" "{{Ceph03_Hostname}}"
+      - ceph-deploy disk zap "{{Ceph01_Hostname}}":"{{DiscoExtraCeph}}" "{{Ceph02_Hostname}}":"{{DiscoExtraCeph}}" "{{Ceph03_Hostname}}":"{{DiscoExtraCeph}}"
+      - ceph-deploy osd prepare "{{Ceph01_Hostname}}":"{{DiscoExtraCeph}}" "{{Ceph02_Hostname}}":"{{DiscoExtraCeph}}" "{{Ceph03_Hostname}}":"{{DiscoExtraCeph}}"
+      - ceph-deploy osd activate "{{Ceph01_Hostname}}":"{{DiscoExtraParticionado}}" "{{Ceph02_Hostname}}":"{{DiscoExtraParticionado}}" "{{Ceph03_Hostname}}":"{{DiscoExtraParticionado}}"
+      - ceph-deploy disk list "{{Ceph01_Hostname}}" "{{Ceph02_Hostname}}" "{{Ceph03_Hostname}}"
+
+  - name: Instalar CEPH - Management final # buena practica separarlos
+    command: ceph-deploy admin "{{Ceph01_Hostname}}" "{{Ceph02_Hostname}}" "{{Ceph03_Hostname}}"
+    args:
+      chdir: "/home/{{User_ceph}}/cluster"
+
+- hosts: cephuser
+  remote_user: "{{User_ceph}}"
+  become: true
+  vars_files:
+  - variables
+  tasks:
+
+  - name: Cambiar permisos al archivo .ssh/config
+    file:
+      path: /etc/ceph/ceph.client.admin.keyring
+      owner: "{{User_ceph}}"
+      group: "{{User_ceph}}"
+      mode: '0644'

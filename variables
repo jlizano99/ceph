@@ -1,0 +1,17 @@
+User_ceph: cephuser
+
+Ceph01_Hostname: ceph01.srv
+Ceph01_IP: 192.168.117.10
+
+Ceph02_Hostname: ceph02.srv
+Ceph02_IP: 192.168.117.11
+
+Ceph03_Hostname: ceph03.srv
+Ceph03_IP: 192.168.117.12
+
+DiscoExtraCeph: /dev/sdb
+DiscoExtraParticionado: /dev/sdb1
+
+PublicNetwork: 192.168.117.1/24
+
+PasswordUserCeph: Password01
