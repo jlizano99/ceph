@@ -58,6 +58,23 @@
       insertafter: '^#Defaults requiretty'
       state: absent
 
+  - name: Comentar linea en sudoers
+    lineinfile:
+      path: /etc/sudoers
+      regexp: '^Defaults requiretty'
+      insertafter: '^#Defaults requiretty'
+      state: absent
+
+  - name: Modificando linea search-disabled-repos.conf
+    lineinfile:
+      path: /etc/yum/pluginconf.d/search-disabled-repos.conf
+      regexp: '^notify_only=1'
+      insertafter: '^#notify_only=1'
+      line: notify_only=0
+
+  - name: Instalar epel-repo
+    command: rpm -Uhv https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+
   - name: Instalar ceph
     command: rpm -Uhv http://download.ceph.com/rpm-jewel/el7/noarch/ceph-release-1-1.el7.noarch.rpm
 
@@ -75,7 +92,6 @@
         - bind-utils
         - bridge-utils
         - bash-completion
-        - ntp-doc
         - kexec-tools
         - createrepo
         - yum-utils
