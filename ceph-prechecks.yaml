@@ -85,6 +85,15 @@
         - open-vm-tools
       state: present
 
+  - name: Agregar usuario {{User_ceph}}
+    user:
+      name: "{{User_ceph}}"
+      password: "{{ my_password | password_hash('sha512') }}"
+      shell: /bin/bash
+      createhome: yes
+      home: /home/{{User_ceph}}
+      append: yes
+
   - name: Desactivar SELinux
     selinux:
       state: disabled

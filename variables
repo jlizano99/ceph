@@ -1,13 +1,13 @@
 User_ceph: cephuser
 
-Ceph01_Hostname: ceph01.srv
-Ceph01_IP: 192.168.117.10
+Ceph01_Hostname: ceph01.ocp4.gbm.net
+Ceph01_IP: 192.168.117.133
 
-Ceph02_Hostname: ceph02.srv
-Ceph02_IP: 192.168.117.11
+Ceph02_Hostname: ceph02.ocp4.gbm.net
+Ceph02_IP: 192.168.117.134
 
-Ceph03_Hostname: ceph03.srv
-Ceph03_IP: 192.168.117.12
+Ceph03_Hostname: ceph03.ocp4.gbm.net
+Ceph03_IP: 192.168.117.135
 
 DiscoExtraCeph: /dev/sdb
 DiscoExtraParticionado: /dev/sdb1
